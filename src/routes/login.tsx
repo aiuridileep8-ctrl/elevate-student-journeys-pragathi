@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
@@ -22,28 +23,55 @@ function LoginPage() {
 
   useEffect(() => {
     if (!supabase) return;
+    const authClient = supabase;
 
     let active = true;
     const callbackParams = new URLSearchParams(
       `${window.location.search}&${window.location.hash.replace(/^#/, "")}`,
     );
+    const confirmationPending =
+      callbackParams.has("confirmed") || callbackParams.get("type") === "signup";
+    const confirmationHandled = { current: false };
+
+    if (confirmationPending) {
+      setNoticeType("success");
+      setNotice("Your email is confirmed. Sign in with your email and password to continue.");
+    }
+
+    async function finishConfirmation() {
+      if (!confirmationPending || confirmationHandled.current) return;
+      confirmationHandled.current = true;
+
+      try {
+        const { error } = await authClient.auth.signOut({ scope: "local" });
+        if (error) throw error;
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (error) {
+        console.error("Unable to end the confirmation session:", error);
+        if (active) {
+          setNoticeType("error");
+          setNotice(
+            "Your email is confirmed, but we couldn't end the confirmation session. Please sign out and try again.",
+          );
+        }
+      }
+    }
+
     if (callbackParams.has("error")) {
       setNoticeType("info");
       setNotice(
         callbackParams.get("error_code") === "otp_expired"
-          ? "This invitation or confirmation link has expired. Ask your administrator to send a new invite."
-          : "We couldn't verify that email link. Ask your administrator to send a new invite.",
+          ? "This confirmation link has expired. Create a new account or ask for a fresh confirmation email."
+          : "We couldn't verify that email link. Please request a fresh confirmation email.",
       );
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        void navigate({ to: "/" });
-      }
+    const { data } = authClient.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" && confirmationPending) void finishConfirmation();
     });
 
-    void supabase.auth.getSession().then(({ data: sessionData, error }) => {
+    void authClient.auth.getSession().then(({ data: sessionData, error }) => {
       if (error) {
         console.error("Unable to restore Supabase session:", error);
         if (active) {
@@ -53,7 +81,11 @@ function LoginPage() {
         return;
       }
       if (active && sessionData.session) {
-        void navigate({ to: "/" });
+        if (confirmationPending) {
+          void finishConfirmation();
+        } else {
+          void navigate({ to: "/" });
+        }
       }
     });
 
@@ -81,19 +113,51 @@ function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (error.message.toLowerCase().includes("email not confirmed")) {
-          setNoticeType("info");
-          setNotice("Confirm your email using the invitation link before signing in.");
-          return;
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          if (error.message.toLowerCase().includes("email not confirmed")) {
+            setNoticeType("info");
+            setNotice("Check your inbox and confirm your email before signing in.");
+            return;
+          }
+          throw error;
         }
-        throw error;
+        await navigate({ to: "/" });
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/login?confirmed=1`,
+          },
+        });
+        if (error) throw error;
+
+        if (data.session) {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+          if (signOutError) throw signOutError;
+          setNoticeType("info");
+          setNotice(
+            "Account created, but email confirmation is disabled. Enable Confirm email in your Supabase Auth settings before testing sign-in.",
+          );
+        } else {
+          setNoticeType("success");
+          setNotice("Account created. Check your inbox to confirm your email, then sign in here.");
+        }
+        form.reset();
+        setShowPassword(false);
+        setIsLogin(true);
       }
-      await navigate({ to: "/" });
     } catch (error) {
       setNoticeType("error");
-      setNotice(error instanceof Error ? error.message : "Unable to sign in. Please try again.");
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : isLogin
+            ? "Unable to sign in. Please try again."
+            : "Unable to create your account. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -151,9 +215,15 @@ function LoginPage() {
           </div>
 
           <div className="login-heading">
-            <span className="login-welcome">WELCOME BACK</span>
-            <h2 id="login-title">Sign in to your workspace</h2>
-            <p>Enter your details to continue to Pragati.</p>
+            <span className="login-welcome">{isLogin ? "WELCOME BACK" : "GET STARTED"}</span>
+            <h2 id="login-title">
+              {isLogin ? "Sign in to your workspace" : "Create your Pragati account"}
+            </h2>
+            <p>
+              {isLogin
+                ? "Enter your details to continue to Pragati."
+                : "Create an account with your email. We’ll send you a confirmation link."}
+            </p>
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
@@ -172,16 +242,18 @@ function LoginPage() {
 
             <div className="login-password-label">
               <label htmlFor="login-password">Password</label>
-              <button
-                className="login-text-button"
-                type="button"
-                onClick={() => {
-                  setNoticeType("info");
-                  setNotice("To reset your password, contact your administrator.");
-                }}
-              >
-                Forgot password?
-              </button>
+              {isLogin && (
+                <button
+                  className="login-text-button"
+                  type="button"
+                  onClick={() => {
+                    setNoticeType("info");
+                    setNotice("To reset your password, contact your administrator.");
+                  }}
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>
             <div className="login-input-wrap">
               <LockKeyhole aria-hidden="true" />
@@ -190,7 +262,8 @@ function LoginPage() {
                 name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
-                autoComplete="current-password"
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                minLength={isLogin ? undefined : 8}
                 required
               />
               <button
@@ -205,7 +278,7 @@ function LoginPage() {
             </div>
 
             <button className="login-submit" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Please wait..." : "Sign in"}
+              {isSubmitting ? "Please wait..." : isLogin ? "Sign in" : "Create account"}
               {!isSubmitting && <ArrowRight aria-hidden="true" />}
             </button>
             <p className={`login-notice ${noticeType}`} role="status" aria-live="polite">
@@ -213,7 +286,19 @@ function LoginPage() {
             </p>
           </form>
 
-          <p className="login-help">Access is by invitation. Contact your Pragati administrator.</p>
+          <p className="login-help">
+            {isLogin ? "New to Pragati? " : "Already have an account? "}
+            <button
+              className="login-text-button"
+              type="button"
+              onClick={() => {
+                setIsLogin((login) => !login);
+                setNotice("");
+              }}
+            >
+              {isLogin ? "Create an account" : "Sign in"}
+            </button>
+          </p>
           <Link to="/" className="login-back-link">
             Back to dashboard
           </Link>
