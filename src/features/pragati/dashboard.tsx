@@ -527,9 +527,7 @@ function InterventionFollowUp({
 
 export function StrideDashboard() {
   const navigate = useNavigate();
-  const [access, setAccess] = useState<"checking" | "approved" | "unapproved" | "error">(
-    "checking",
-  );
+  const [access, setAccess] = useState<"checking" | "signed-in" | "error">("checking");
   const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
   const [accessMessage, setAccessMessage] = useState("");
 
@@ -540,9 +538,7 @@ export function StrideDashboard() {
       setAccessMessage("Supabase is not configured. Add the project URL and publishable key.");
       return;
     }
-
     let active = true;
-    let accessChannel: ReturnType<typeof client.channel> | undefined;
     const { data } = client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") void navigate({ to: "/login" });
     });
@@ -556,78 +552,40 @@ export function StrideDashboard() {
           await navigate({ to: "/login" });
           return;
         }
-
-        const { data: membership, error: membershipError } = await client
-          .from("staff_access")
-          .select("is_active")
-          .eq("user_id", session.user.id)
-          .maybeSingle();
-        if (membershipError) throw membershipError;
         if (!active) return;
 
         setUser({ id: session.user.id, email: session.user.email ?? null });
-        if (membership?.is_active) {
-          setAccess("approved");
-          accessChannel = client
-            .channel(`staff-access-${session.user.id}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "staff_access",
-                filter: `user_id=eq.${session.user.id}`,
-              },
-              (payload) => {
-                if (payload.eventType === "DELETE" || !payload.new["is_active"]) {
-                  setUser(null);
-                  setAccess("unapproved");
-                }
-              },
-            )
-            .subscribe();
-        } else {
-          setAccess("unapproved");
-        }
+        setAccess("signed-in");
       })
       .catch((cause: unknown) => {
-        console.error("Unable to verify staff access:", cause);
+        console.error("Unable to verify signed-in access:", cause);
         if (!active) return;
         setAccess("error");
         setAccessMessage(
           cause instanceof Error
-            ? `${cause.message}. Make sure the approved-staff database migration is applied.`
-            : "Staff access could not be verified. Please contact your administrator.",
+            ? cause.message
+            : "Your sign-in could not be verified. Please sign in again.",
         );
       });
 
     return () => {
       active = false;
       data.subscription.unsubscribe();
-      if (accessChannel) void client.removeChannel(accessChannel);
     };
   }, [navigate]);
 
-  if (access !== "approved" || !user) {
+  if (access !== "signed-in" || !user) {
     return (
       <main className="staff-access-page">
         <section className="staff-access-card">
           <ShieldCheck className="staff-access-icon" />
-          <h1>
-            {access === "unapproved"
-              ? "Access requires approval"
-              : access === "error"
-                ? "Unable to verify access"
-                : "Verifying staff access"}
-          </h1>
+          <h1>{access === "error" ? "Unable to verify sign-in" : "Verifying your sign-in"}</h1>
           <p>
-            {access === "unapproved"
-              ? "Your account does not have active staff access. Ask your Stride administrator to approve your account."
-              : access === "error"
-                ? accessMessage
-                : "Checking your institution access before loading student records."}
+            {access === "error"
+              ? accessMessage
+              : "Checking your account before loading the dashboard."}
           </p>
-          {(access === "unapproved" || access === "error") && (
+          {access === "error" && (
             <Button variant="outline" onClick={() => void navigate({ to: "/login" })}>
               Back to sign in
             </Button>
@@ -1259,13 +1217,13 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
                 {view === "Overview"
                   ? "See who needs support. Understand why. Make the next step count."
                   : view === "Students"
-                    ? "Student records entered by approved staff and scored using transparent rules."
+                    ? "Student records entered by signed-in users and scored using transparent rules."
                     : view === "Interventions"
                       ? "A coordinated support plan for the students who need it most."
                       : view === "Risk analytics"
                         ? "Transparent, weighted risk scores with every contributing factor."
                         : view === "Data sources"
-                          ? "Live Supabase roster protected by approved-staff access rules."
+                          ? "Live Supabase roster available to confirmed accounts during evaluation."
                           : "Your institution and rules-based risk scoring configuration."}
               </p>
             </div>
@@ -1718,8 +1676,8 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
                   </table>
                 </div>
                 <div className="source-footer">
-                  These records are entered by approved staff; no institutional systems are
-                  imported.
+                  These records are entered by signed-in users; no institutional systems are
+                  imported. Production access will be restricted to approved staff.
                 </div>
               </section>
             </>
@@ -1841,9 +1799,9 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
                     ))}
                 </div>
                 <p className="prototype-note">
-                  Student records are entered by approved staff and stored in Supabase. Risk scores
-                  use transparent weighted rules, not a trained predictive model. Intervention
-                  assignments currently last for this browser session.
+                  Student records are stored in Supabase and are open to confirmed accounts during
+                  evaluation. Production access will be restricted to approved staff. Risk scores
+                  use transparent weighted rules, not a trained predictive model.
                 </p>
               </div>
             </section>

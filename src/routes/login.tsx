@@ -16,6 +16,8 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
@@ -31,44 +33,55 @@ function LoginPage() {
     );
     const confirmationPending =
       callbackParams.has("confirmed") || callbackParams.get("type") === "signup";
+    let recoveryPending = callbackParams.get("type") === "recovery" || callbackParams.has("reset");
     const confirmationHandled = { current: false };
+
+    if (recoveryPending) {
+      setIsPasswordRecovery(true);
+      setIsLogin(true);
+      setNoticeType("info");
+      setNotice("Choose a new password for your account.");
+    }
 
     if (confirmationPending) {
       setNoticeType("success");
-      setNotice("Your email is confirmed. Sign in with your email and password to continue.");
+      setNotice("Your email is confirmed. Opening your Stride dashboard...");
     }
 
-    async function finishConfirmation() {
+    function finishConfirmation() {
       if (!confirmationPending || confirmationHandled.current) return;
       confirmationHandled.current = true;
-
-      try {
-        const { error } = await authClient.auth.signOut({ scope: "local" });
-        if (error) throw error;
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } catch (error) {
-        console.error("Unable to end the confirmation session:", error);
-        if (active) {
-          setNoticeType("error");
-          setNotice(
-            "Your email is confirmed, but we couldn't end the confirmation session. Please sign out and try again.",
-          );
-        }
-      }
+      void navigate({ to: "/" });
     }
 
     if (callbackParams.has("error")) {
-      setNoticeType("info");
+      const recoveryLinkError =
+        callbackParams.get("error_code") === "otp_expired" ||
+        callbackParams.get("error_code") === "access_denied";
+      setNoticeType(recoveryLinkError ? "error" : "info");
       setNotice(
-        callbackParams.get("error_code") === "otp_expired"
-          ? "This confirmation link has expired. Create a new account or ask for a fresh confirmation email."
+        recoveryLinkError
+          ? "This password reset link is invalid or expired. Request a new reset email and open the newest link."
           : "We couldn't verify that email link. Please request a fresh confirmation email.",
       );
+      setIsPasswordRecovery(false);
+      setIsForgotPassword(true);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     const { data } = authClient.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" && confirmationPending) void finishConfirmation();
+      if (event === "PASSWORD_RECOVERY") {
+        recoveryPending = true;
+        setIsPasswordRecovery(true);
+        setIsForgotPassword(false);
+        setIsLogin(true);
+        setNoticeType("info");
+        setNotice("Choose a new password for your account.");
+      } else if (event === "SIGNED_IN" && confirmationPending) {
+        void finishConfirmation();
+      } else if (event === "SIGNED_IN" && !recoveryPending) {
+        void navigate({ to: "/" });
+      }
     });
 
     void authClient.auth.getSession().then(({ data: sessionData, error }) => {
@@ -82,7 +95,9 @@ function LoginPage() {
       }
       if (active && sessionData.session) {
         if (confirmationPending) {
-          void finishConfirmation();
+          finishConfirmation();
+        } else if (recoveryPending) {
+          setIsPasswordRecovery(true);
         } else {
           void navigate({ to: "/" });
         }
@@ -102,6 +117,7 @@ function LoginPage() {
     const formData = new FormData(form);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(formData.get("confirm-password") ?? "");
 
     if (!supabase) {
       setNoticeType("error");
@@ -113,7 +129,35 @@ function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      if (isLogin) {
+      if (isPasswordRecovery) {
+        if (password !== confirmPassword) {
+          setNoticeType("error");
+          setNotice("The passwords do not match.");
+          return;
+        }
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+        if (signOutError) {
+          console.error(
+            "Password changed, but signing out the recovery session failed:",
+            signOutError,
+          );
+        }
+        form.reset();
+        setIsPasswordRecovery(false);
+        setIsForgotPassword(false);
+        setIsLogin(true);
+        setNoticeType("success");
+        setNotice("Password updated. Sign in with your new password.");
+      } else if (isForgotPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/login?reset=1`,
+        });
+        if (error) throw error;
+        setNoticeType("success");
+        setNotice("If an account exists for that email, a password reset link has been sent.");
+      } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           if (error.message.toLowerCase().includes("email not confirmed")) {
@@ -154,9 +198,13 @@ function LoginPage() {
       setNotice(
         error instanceof Error
           ? error.message
-          : isLogin
-            ? "Unable to sign in. Please try again."
-            : "Unable to create your account. Please try again.",
+          : isPasswordRecovery
+            ? "Unable to update your password. Please request a new reset link."
+            : isForgotPassword
+              ? "Unable to send a password reset email. Please try again."
+              : isLogin
+                ? "Unable to sign in. Please try again."
+                : "Unable to create your account. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -215,70 +263,125 @@ function LoginPage() {
           </div>
 
           <div className="login-heading">
-            <span className="login-welcome">{isLogin ? "WELCOME BACK" : "GET STARTED"}</span>
+            <span className="login-welcome">
+              {isPasswordRecovery
+                ? "PASSWORD RESET"
+                : isForgotPassword
+                  ? "ACCOUNT RECOVERY"
+                  : isLogin
+                    ? "WELCOME BACK"
+                    : "GET STARTED"}
+            </span>
             <h2 id="login-title">
-              {isLogin ? "Sign in to your workspace" : "Create your Stride account"}
+              {isPasswordRecovery
+                ? "Choose a new password"
+                : isForgotPassword
+                  ? "Reset your password"
+                  : isLogin
+                    ? "Sign in to your workspace"
+                    : "Create your Stride account"}
             </h2>
             <p>
-              {isLogin
-                ? "Enter your details to continue to Stride."
-                : "Create an account with your email. We’ll send you a confirmation link."}
+              {isPasswordRecovery
+                ? "Enter and confirm your new password below."
+                : isForgotPassword
+                  ? "Enter your account email and we’ll send a password reset link."
+                  : isLogin
+                    ? "Enter your details to continue to Stride."
+                    : "Create an account with your email. We’ll send you a confirmation link."}
             </p>
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
-            <label htmlFor="login-email">Work email</label>
-            <div className="login-input-wrap">
-              <Mail aria-hidden="true" />
-              <input
-                id="login-email"
-                name="email"
-                type="email"
-                placeholder="you@institution.edu"
-                autoComplete="email"
-                required
-              />
-            </div>
+            {!isPasswordRecovery && (
+              <>
+                <label htmlFor="login-email">Work email</label>
+                <div className="login-input-wrap">
+                  <Mail aria-hidden="true" />
+                  <input
+                    id="login-email"
+                    name="email"
+                    type="email"
+                    placeholder="you@institution.edu"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+              </>
+            )}
 
-            <div className="login-password-label">
-              <label htmlFor="login-password">Password</label>
-              {isLogin && (
-                <button
-                  className="login-text-button"
-                  type="button"
-                  onClick={() => {
-                    setNoticeType("info");
-                    setNotice("To reset your password, contact your administrator.");
-                  }}
-                >
-                  Forgot password?
-                </button>
-              )}
-            </div>
-            <div className="login-input-wrap">
-              <LockKeyhole aria-hidden="true" />
-              <input
-                id="login-password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                minLength={isLogin ? undefined : 8}
-                required
-              />
-              <button
-                className="login-password-toggle"
-                type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                aria-pressed={showPassword}
-                onClick={() => setShowPassword((visible) => !visible)}
-              >
-                {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-              </button>
-            </div>
+            {!isForgotPassword && (
+              <>
+                <div className="login-password-label">
+                  <label htmlFor="login-password">
+                    {isPasswordRecovery ? "New password" : "Password"}
+                  </label>
+                  {isLogin && !isPasswordRecovery && (
+                    <button
+                      className="login-text-button"
+                      type="button"
+                      onClick={() => {
+                        setIsForgotPassword(true);
+                        setNotice("");
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="login-input-wrap">
+                  <LockKeyhole aria-hidden="true" />
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder={
+                      isPasswordRecovery ? "Enter a new password" : "Enter your password"
+                    }
+                    autoComplete={isLogin ? "current-password" : "new-password"}
+                    minLength={isLogin && !isPasswordRecovery ? undefined : 8}
+                    required
+                  />
+                  <button
+                    className="login-password-toggle"
+                    type="button"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((visible) => !visible)}
+                  >
+                    {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                  </button>
+                </div>
+                {isPasswordRecovery && (
+                  <>
+                    <label htmlFor="confirm-password">Confirm new password</label>
+                    <div className="login-input-wrap">
+                      <LockKeyhole aria-hidden="true" />
+                      <input
+                        id="confirm-password"
+                        name="confirm-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Re-enter your new password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
 
             <button className="login-submit" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Please wait..." : isLogin ? "Sign in" : "Create account"}
+              {isSubmitting
+                ? "Please wait..."
+                : isPasswordRecovery
+                  ? "Update password"
+                  : isForgotPassword
+                    ? "Send reset link"
+                    : isLogin
+                      ? "Sign in"
+                      : "Create account"}
               {!isSubmitting && <ArrowRight aria-hidden="true" />}
             </button>
             <p className={`login-notice ${noticeType}`} role="status" aria-live="polite">
@@ -286,18 +389,39 @@ function LoginPage() {
             </p>
           </form>
 
+          {isPasswordRecovery || isForgotPassword ? (
+            <p className="login-help">
+              <button
+                className="login-text-button"
+                type="button"
+                onClick={() => {
+                  setIsPasswordRecovery(false);
+                  setIsForgotPassword(false);
+                  setNotice("");
+                  setIsLogin(true);
+                }}
+              >
+                Back to sign in
+              </button>
+            </p>
+          ) : (
+            <p className="login-help">
+              {isLogin ? "New to Stride? " : "Already have an account? "}
+              <button
+                className="login-text-button"
+                type="button"
+                onClick={() => {
+                  setIsLogin((login) => !login);
+                  setNotice("");
+                }}
+              >
+                {isLogin ? "Create an account" : "Sign in"}
+              </button>
+            </p>
+          )}
           <p className="login-help">
-            {isLogin ? "New to Stride? " : "Already have an account? "}
-            <button
-              className="login-text-button"
-              type="button"
-              onClick={() => {
-                setIsLogin((login) => !login);
-                setNotice("");
-              }}
-            >
-              {isLogin ? "Create an account" : "Sign in"}
-            </button>
+            Evaluation access is open to confirmed accounts. Production access will be limited to
+            approved staff.
           </p>
           <Link to="/" className="login-back-link">
             Back to dashboard

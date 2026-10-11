@@ -67,15 +67,8 @@ Deno.serve(async (request) => {
     global: { headers: { Authorization: authorization } },
   });
   const { data: userData, error: userError } = await client.auth.getUser(accessToken);
-  if (userError || !userData.user) return response({ error: "Sign in to send this notification." }, 401);
-
-  const { data: access, error: accessError } = await client
-    .from("staff_access")
-    .select("is_active")
-    .eq("user_id", userData.user.id)
-    .maybeSingle();
-  if (accessError) return response({ error: "Staff access could not be verified." }, 403);
-  if (!access?.is_active) return response({ error: "Active staff access is required." }, 403);
+  if (userError || !userData.user)
+    return response({ error: "Sign in to send this notification." }, 401);
 
   const { data: intervention, error: interventionError } = await client
     .from("interventions")

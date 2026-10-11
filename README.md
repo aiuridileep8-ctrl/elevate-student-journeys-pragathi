@@ -35,45 +35,44 @@ npm run dev
 
 ## Authentication and student database setup
 
-The `/login` page uses Supabase Auth for invited staff email/password sign-in. Supabase securely
-stores credentials in its managed Auth database; this app does not store passwords.
+The `/login` page uses Supabase Auth for email/password accounts. Supabase securely stores
+credentials in its managed Auth database; this app does not store passwords. During evaluation,
+any email-confirmed account can access and modify the live student roster and intervention records
+without administrator approval. This deliberately open access is for the prototype only; restrict
+access to approved staff before production use.
 
-1. In Supabase **Authentication → Settings**, enable email/password and turn off public sign-ups.
-   Invite staff from **Authentication → Users → Invite user** instead.
+1. In Supabase **Authentication → Sign In / Providers**, enable email/password and allow new users
+   to sign up. In **Authentication → URL Configuration**, keep email confirmation enabled.
 2. Copy `.env.example` to `.env.local` and set `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_PUBLISHABLE_KEY` from the project API settings. Never put a secret or
    `service_role` key in this file.
 3. Run [`supabase/migrations/20261010193000_student_records.sql`](./supabase/migrations/20261010193000_student_records.sql)
    in the Supabase SQL Editor. It creates the roster, staff access list, row-level security
    policies, and realtime publication.
-4. Add the app origins to **Authentication → URL Configuration**. Allow
-   `http://localhost:8085/login` for the current local port, and
-   `https://elevate-student-journeys.lovable.app/login` when using the deployed site. Update the
-   local URL if the dev server chooses a different port.
-5. After inviting a staff member, grant access in the SQL Editor using their Auth user email:
+4. In **Authentication → URL Configuration**, set the Site URL to the deployed app origin and
+   allow the sign-in and recovery callback URLs, including
+   `https://snazzy-bubblegum-7ce2b4.netlify.app/login`,
+   `https://snazzy-bubblegum-7ce2b4.netlify.app/login?reset=1`,
+   `http://localhost:8080/login`, and `http://localhost:8080/login?reset=1`.
+   Do not leave the Site URL set to an inactive localhost port for production.
+5. After applying the student, intervention, follow-up, and semester migrations below, run
+   [`supabase/migrations/20261011103000_open_confirmed_user_access.sql`](./supabase/migrations/20261011103000_open_confirmed_user_access.sql)
+   in the SQL Editor. It removes the administrator approval requirement for authenticated users.
+6. Restart the development server after changing environment variables. New users must confirm
+   their email and sign in before accessing the dashboard.
 
-   ```sql
-   insert into public.staff_access (user_id, role, is_active)
-   select id, 'admin', true
-   from auth.users
-   where lower(email) = lower('staff@example.edu')
-   on conflict (user_id) do update
-     set role = excluded.role, is_active = true;
-   ```
+Users can request a password reset from **Sign in → Forgot password?**. Supabase sends a one-time
+recovery link to the account email; after opening it, users set and confirm a new password in Stride.
+If a link expires or redirects to an unavailable local address, correct the Site URL and allowed
+redirect URLs above, then request a fresh link.
 
-   Replace the example email. Use `staff` rather than `admin` for staff accounts; both roles can
-   manage student records. Set `is_active = false` to revoke access.
-
-6. Restart the development server after changing environment variables. Only users with an active
-   `staff_access` row can read or change the roster.
-
-Approved staff can add and edit records in **Students → Add student**. Fields match the dashboard
+Signed-in users can add and edit records in **Students → Add student** during evaluation. Fields match the dashboard
 scoring model: student ID, name, department, year, academic year, semester, attendance, academic
 score, backlogs, missed assignments, fee dues, engagement, and placement readiness. Roster changes
 sync to connected dashboards in realtime. The database validates score ranges and enforces
 student-ID uniqueness. Risk scores are rule-based, not institutional predictions.
 
-For bulk entry, approved staff can use **Students → Import CSV**. In Excel, use one student per
+For bulk entry, signed-in users can use **Students → Import CSV**. In Excel, use one student per
 row with these headers: `student_id`, `name`, `department`, `year_label`, `academic_year`,
 `semester`, `attendance`, `grades`, `backlogs`, `missed`, `engagement`, and `placement`.
 `fees` is optional and defaults to `0`; use `1` for outstanding dues. Export as **CSV UTF-8**,
@@ -93,7 +92,7 @@ the real student roster or exposed through MCP.
 
 ### Intervention assignment notifications
 
-Approved staff can assign an intervention to one of the prototype counsellor names and enter that
+Signed-in users can assign an intervention to one of the prototype counsellor names and enter that
 person's email address. The assignment is stored in `public.interventions`; a database trigger
 creates an in-app notification for that email, and the dashboard listens for matching notifications
 in realtime. After assignment, the dashboard calls the `send-intervention-notification` Supabase
