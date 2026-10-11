@@ -94,7 +94,7 @@ export function parseStudentCsv(csv: string): StudentRecordInput[] {
     const engagement = number("engagement");
     const placement = number("placement");
     const boundedValues: [string, number, number, number][] = [
-      ["semester", semester, 1, 12],
+      ["semester", semester, 1, 8],
       ["attendance", attendance, 0, 100],
       ["grades", grades, 0, 100],
       ["backlogs", backlogs, 0, 100],

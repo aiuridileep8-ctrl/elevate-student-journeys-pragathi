@@ -9,13 +9,13 @@
     "server": {
       "name": "elevate-student-journeys",
       "version": "0.1.0",
-      "title": "Elevate Student Journeys"
+      "title": "Stride"
     },
     "tools": [
       {
         "name": "list_students",
         "title": "List students",
-        "description": "List Pragati's simulated sample students with their risk score and level, optionally filtered by risk level.",
+        "description": "List Stride's simulated sample students with their risk score and level, optionally filtered by risk level.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,

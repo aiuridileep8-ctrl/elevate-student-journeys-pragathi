@@ -1,10 +1,10 @@
-# Elevate Student Journeys
+# Stride
 
-Colleges collect large amounts of student data, but it sits in separate systems, so administrators often spot struggling students only after the damage is done. Pragati is a student success platform that brings data from seven sources into one unified student view: academic records, attendance, LMS activity, engagement, placement readiness, skills and course feedback. Records from each source are matched into a single profile per student.
+Colleges collect large amounts of student data, but it sits in separate systems, so administrators often spot struggling students only after the damage is done. Stride is a student success platform that brings data from seven sources into one unified student view: academic records, attendance, LMS activity, engagement, placement readiness, skills and course feedback. Records from each source are matched into a single profile per student.
 
 The platform turns this data into a risk score from 0 to 100 for each student. The score is explainable: it is built from named factors such as low attendance, falling grades, backlogs, missed assignments, fee dues, low engagement and weak placement readiness, so counsellors can see why a student is flagged. A risk map shows the whole cohort at a glance, and a priority list ranks the students who most need help. A what-if simulator shows how improving attendance would change a student’s risk.
 
-Pragati also moves from insight to action. It recommends targeted interventions for each student, such as guardian outreach, peer tutoring, backlog clearance plans, mentoring and fee counselling, and lets administrators assign them to counsellors. The dashboard then shows how many students would leave high risk if the planned actions work. Automatically generated insights point out department-level patterns and students close to the high-risk threshold, so action can come before exams.
+Stride also moves from insight to action. It recommends targeted interventions for each student, such as guardian outreach, peer tutoring, backlog clearance plans, mentoring and fee counselling, and lets administrators assign them to counsellors. The dashboard then shows how many students would leave high risk if the planned actions work. Automatically generated insights point out department-level patterns and students close to the high-risk threshold, so action can come before exams.
 
 The prototype uses simulated data and a transparent weighted scoring model. Planned next steps are importing real institutional data and training a predictive model, such as gradient boosting, on historical outcomes. The explanation of each score would be kept alongside it.
 
@@ -77,11 +77,16 @@ For bulk entry, approved staff can use **Students → Import CSV**. In Excel, us
 row with these headers: `student_id`, `name`, `department`, `year_label`, `academic_year`,
 `semester`, `attendance`, `grades`, `backlogs`, `missed`, `engagement`, and `placement`.
 `fees` is optional and defaults to `0`; use `1` for outstanding dues. Export as **CSV UTF-8**,
-then select the file in the app. Semester must be 1–12; attendance, grades, engagement, and
+then select the file in the app. Semester must be 1–8 for B.Tech; attendance, grades, engagement, and
 placement must be 0–100; backlogs and missed assignments must be whole numbers. Student IDs must
 be unique both within the file and across the existing roster. If any ID already exists, the
 database rejects the whole batch so no partial import is made. Each inserted row is attributed to
 the signed-in staff account.
+
+Apply [`supabase/migrations/20261011090000_btech_eight_semesters.sql`](./supabase/migrations/20261011090000_btech_eight_semesters.sql)
+to enforce the 1–8 semester limit in the database as well as the app. The migration preserves any
+existing records outside that range, but the database will reject new or updated invalid semester
+values.
 
 The eight example profiles and public MCP tools remain simulated-only. They are not imported into
 the real student roster or exposed through MCP.
@@ -91,23 +96,27 @@ the real student roster or exposed through MCP.
 Approved staff can assign an intervention to one of the prototype counsellor names and enter that
 person's email address. The assignment is stored in `public.interventions`; a database trigger
 creates an in-app notification for that email, and the dashboard listens for matching notifications
-in realtime. The assignee can see the in-app notification after signing into Pragati with the same
-email address. Email notifications are currently paused.
+in realtime. After assignment, the dashboard calls the `send-intervention-notification` Supabase
+Edge Function to send an email. The assignee can also see the in-app notification after signing into
+Stride with the same email address.
 
 Apply [`supabase/migrations/20261010233000_intervention_notifications.sql`](./supabase/migrations/20261010233000_intervention_notifications.sql)
 after the student-record migration. Assignments include a follow-up due date and can be updated with
 staff notes and a completion outcome in **Interventions → Follow-up tracking**. Apply
 [`supabase/migrations/20261011004700_intervention_follow_up.sql`](./supabase/migrations/20261011004700_intervention_follow_up.sql)
 after the intervention-notifications migration to add these fields. In-app notifications are
-available; email delivery is currently paused. To enable email later, configure a Resend account with
-a verified sender domain, link the Supabase project with the Supabase CLI, set the Edge Function
-secrets and deploy the function, then re-enable the frontend invocation:
+available. To enable email delivery, configure a Resend account with a verified sender domain, link
+the correct Supabase project with the Supabase CLI, set the Edge Function secrets and deploy the
+function:
 
 ```sh
-supabase secrets set RESEND_API_KEY=<your-resend-api-key> NOTIFICATION_FROM="Pragati <notifications@your-verified-domain>"
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase secrets set RESEND_API_KEY=<your-resend-api-key> NOTIFICATION_FROM="Stride <notifications@your-verified-domain>"
 supabase functions deploy send-intervention-notification
 ```
 
 Replace the sender with an address verified by Resend. These values are server-side Supabase
 secrets; never add the Resend key or a Supabase secret/service-role key to frontend environment
-variables.
+variables. Netlify deployment alone does not configure the Resend provider: emails will report a
+delivery error until these secrets are set and the Edge Function is deployed.

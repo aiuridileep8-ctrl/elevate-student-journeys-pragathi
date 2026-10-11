@@ -100,7 +100,7 @@ export function StudentRecordForm({
             {input("department", "Department")}
             {input("year_label", "Year of study", { placeholder: "e.g. 2nd year" })}
             {input("academic_year", "Academic year")}
-            {input("semester", "Semester", { type: "number", min: 1, max: 12 })}
+            {input("semester", "Semester", { type: "number", min: 1, max: 8 })}
             {input("attendance", "Attendance (%)", {
               type: "number",
               min: 0,

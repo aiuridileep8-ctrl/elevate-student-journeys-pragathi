@@ -5,7 +5,7 @@ import { students, riskScore, riskLevel } from "@/features/pragati/data";
 export default defineTool({
   name: "list_students",
   title: "List students",
-  description: "List Pragati's simulated sample students with their risk score and level, optionally filtered by risk level.",
+  description: "List Stride's simulated sample students with their risk score and level, optionally filtered by risk level.",
   inputSchema: { level: z.enum(["high", "moderate", "low"]).optional().describe("Only return students at this risk level.") },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: ({ level }) => {

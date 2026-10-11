@@ -78,7 +78,7 @@ function Brand() {
           <i />
           <i />
         </span>
-        pragati<span className="text-primary">.</span>
+        stride<span className="text-primary">.</span>
       </div>
       <div className="brand-sub">EVERY STUDENT. A STEP FORWARD.</div>
     </div>
@@ -204,7 +204,7 @@ function StudentDetails({
 }: {
   student: Student;
   close: () => void;
-  assign: (i: Intervention) => Promise<void>;
+  assign: (i: Intervention) => Promise<{ emailSent: boolean; emailError?: string }>;
   edit: (student: Student) => void;
 }) {
   const [attendance, setAttendance] = useState(student.attendance);
@@ -392,10 +392,12 @@ function StudentDetails({
                 notes: "",
                 completionOutcome: null,
               })
-                .then(() => {
+                .then(({ emailSent, emailError }) => {
                   setAssigned(true);
                   setAssignmentMessage(
-                    `Assigned to ${counsellor}. An in-app notification was created; email notifications are paused for now.`,
+                    emailSent
+                      ? `Assigned to ${counsellor}. An in-app notification and email were sent.`
+                      : `Assigned to ${counsellor} and an in-app notification was created, but the email could not be sent${emailError ? `: ${emailError}` : "."}`,
                   );
                 })
                 .catch((cause: unknown) => {
@@ -523,7 +525,7 @@ function InterventionFollowUp({
   );
 }
 
-export function PragatiDashboard() {
+export function StrideDashboard() {
   const navigate = useNavigate();
   const [access, setAccess] = useState<"checking" | "approved" | "unapproved" | "error">(
     "checking",
@@ -620,7 +622,7 @@ export function PragatiDashboard() {
           </h1>
           <p>
             {access === "unapproved"
-              ? "Your account does not have active staff access. Ask your Pragati administrator to approve your account."
+              ? "Your account does not have active staff access. Ask your Stride administrator to approve your account."
               : access === "error"
                 ? accessMessage
                 : "Checking your institution access before loading student records."}
@@ -793,7 +795,9 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
       (riskFilter === "All risk levels" || riskLevel(riskScore(s)) === riskFilter),
   );
   const highCount = filtered.filter((s) => riskLevel(riskScore(s)) === "high").length;
-  const assign = async (intervention: Intervention): Promise<void> => {
+  const assign = async (
+    intervention: Intervention,
+  ): Promise<{ emailSent: boolean; emailError?: string }> => {
     if (!supabase) throw new Error("Supabase is not configured.");
     const counsellorEmail = intervention.counsellorEmail?.trim().toLowerCase();
     if (!counsellorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(counsellorEmail)) {
@@ -816,6 +820,26 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
       .single();
     if (error) throw error;
     setPlans((current) => [interventionFromRow(data), ...current]);
+
+    const { data: emailResult, error: emailError } = await supabase.functions.invoke(
+      "send-intervention-notification",
+      { body: { interventionId: data.id } },
+    );
+    if (emailError) {
+      console.error("Intervention was assigned, but its email notification failed:", emailError);
+      return { emailSent: false, emailError: emailError.message };
+    }
+    if (!emailResult?.emailSent) {
+      console.error(
+        "Intervention email function returned without confirming delivery:",
+        emailResult,
+      );
+      return {
+        emailSent: false,
+        emailError: "The email service did not confirm delivery.",
+      };
+    }
+    return { emailSent: true };
   };
   const markNotificationRead = async (notificationId: string) => {
     if (!supabase) return;
@@ -1004,7 +1028,7 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = "pragati-student-risk-report.csv";
+    a.download = "stride-student-risk-report.csv";
     a.click();
     URL.revokeObjectURL(url);
     setNotice("The current student roster has been exported.");
@@ -1152,7 +1176,7 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
               <Building2 size={18} />
             </div>
             <div>
-              <strong>Pragati Institute</strong>
+              <strong>Stride Institute</strong>
               <small>Administrator workspace</small>
             </div>
             <ChevronDown size={13} className="ml-auto" />
@@ -1280,7 +1304,7 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
                 }}
               >
                 <option value="">All semesters</option>
-                {Array.from({ length: 12 }, (_, index) => index + 1).map((number) => (
+                {Array.from({ length: 8 }, (_, index) => index + 1).map((number) => (
                   <option key={number} value={number}>
                     Semester {number}
                   </option>
@@ -1793,7 +1817,7 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
                 <div className="detail-metrics">
                   <div className="detail-metric">
                     <small>Institution</small>
-                    <strong className="!text-sm">Pragati Institute</strong>
+                    <strong className="!text-sm">Stride Institute</strong>
                   </div>
                   <div className="detail-metric">
                     <small>Academic year</small>
@@ -1825,7 +1849,7 @@ function DashboardWorkspace({ userEmail, userId }: { userEmail: string | null; u
             </section>
           )}
           <footer className="page-footer">
-            <span>© 2026 Pragati · Every student deserves a way forward.</span>
+            <span>© 2026 Stride · Every student deserves a way forward.</span>
             <span className="flex items-center gap-1">
               <ShieldCheck size={11} />
               Live staff-entered roster · Transparent weighted scoring

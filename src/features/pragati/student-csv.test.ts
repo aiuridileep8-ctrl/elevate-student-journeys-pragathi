@@ -46,10 +46,17 @@ describe("student CSV import", () => {
 
   it("rejects invalid values and missing required columns with useful feedback", () => {
     expect(() =>
-      parseStudentCsv(`${headers}\nPRG-1,Ada,CSE,1st year,2026-27,13,88,76,0,1,70,65,0`),
-    ).toThrow("semester must be between 1 and 12");
+      parseStudentCsv(`${headers}\nPRG-1,Ada,CSE,1st year,2026-27,9,88,76,0,1,70,65,0`),
+    ).toThrow("semester must be between 1 and 8");
     expect(() => parseStudentCsv("student_id,name\nPRG-1,Ada")).toThrow(
       "Missing required CSV columns",
     );
+  });
+
+  it("accepts semester 8 as the final B.Tech semester", () => {
+    const records = parseStudentCsv(
+      `${headers}\nPRG-1,Ada,CSE,4th year,2026-27,8,88,76,0,1,70,65,0`,
+    );
+    expect(records[0]?.semester).toBe(8);
   });
 });

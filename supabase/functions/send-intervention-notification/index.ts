@@ -91,8 +91,8 @@ Deno.serve(async (request) => {
   }
 
   const subject = `Student support assignment: ${intervention.student_name}`;
-  const text = `${intervention.counsellor},\n\nYou have been assigned "${intervention.action}" for ${intervention.student_name} in Pragati.\n\nSign in to Pragati with this email address to view the in-app notification.\n`;
-  const html = `<p>${escapeHtml(intervention.counsellor)},</p><p>You have been assigned <strong>${escapeHtml(intervention.action)}</strong> for ${escapeHtml(intervention.student_name)} in Pragati.</p><p>Sign in to Pragati with this email address to view the in-app notification.</p>`;
+  const text = `${intervention.counsellor},\n\nYou have been assigned "${intervention.action}" for ${intervention.student_name} in Stride.\n\nSign in to Stride with this email address to view the in-app notification.\n`;
+  const html = `<p>${escapeHtml(intervention.counsellor)},</p><p>You have been assigned <strong>${escapeHtml(intervention.action)}</strong> for ${escapeHtml(intervention.student_name)} in Stride.</p><p>Sign in to Stride with this email address to view the in-app notification.</p>`;
 
   let emailResponse: Response;
   try {

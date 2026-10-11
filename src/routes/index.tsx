@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PragatiDashboard } from "@/features/pragati/dashboard";
+import { StrideDashboard } from "@/features/pragati/dashboard";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Pragati — Student Success Overview" },
+      { title: "Stride — Student Success Overview" },
       {
         name: "description",
         content:
-          "Review staff-entered student records, transparent risk scores, and support plans in Pragati.",
+          "Review staff-entered student records, transparent risk scores, and support plans in Stride.",
       },
-      { property: "og:title", content: "Pragati — Student Success Overview" },
+      { property: "og:title", content: "Stride — Student Success Overview" },
       {
         property: "og:description",
         content:
@@ -19,5 +19,5 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: PragatiDashboard,
+  component: StrideDashboard,
 });

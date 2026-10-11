@@ -6,8 +6,8 @@ import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Pragati" },
-      { name: "description", content: "Sign in to your Pragati student success workspace." },
+      { title: "Sign in — Stride" },
+      { name: "description", content: "Sign in to your Stride student success workspace." },
     ],
   }),
   component: LoginPage,
@@ -165,15 +165,15 @@ function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-story" aria-label="About Pragati">
-        <Link to="/" className="login-brand" aria-label="Pragati home">
+      <section className="login-story" aria-label="About Stride">
+        <Link to="/" className="login-brand" aria-label="Stride home">
           <span className="login-brand-mark" aria-hidden="true">
             <i />
             <i />
             <i />
           </span>
           <span>
-            pragati<span className="login-brand-period">.</span>
+            stride<span className="login-brand-period">.</span>
           </span>
         </Link>
 
@@ -210,18 +210,18 @@ function LoginPage() {
               <i />
             </span>
             <span>
-              pragati<span className="login-brand-period">.</span>
+              stride<span className="login-brand-period">.</span>
             </span>
           </div>
 
           <div className="login-heading">
             <span className="login-welcome">{isLogin ? "WELCOME BACK" : "GET STARTED"}</span>
             <h2 id="login-title">
-              {isLogin ? "Sign in to your workspace" : "Create your Pragati account"}
+              {isLogin ? "Sign in to your workspace" : "Create your Stride account"}
             </h2>
             <p>
               {isLogin
-                ? "Enter your details to continue to Pragati."
+                ? "Enter your details to continue to Stride."
                 : "Create an account with your email. We’ll send you a confirmation link."}
             </p>
           </div>
@@ -287,7 +287,7 @@ function LoginPage() {
           </form>
 
           <p className="login-help">
-            {isLogin ? "New to Pragati? " : "Already have an account? "}
+            {isLogin ? "New to Stride? " : "Already have an account? "}
             <button
               className="login-text-button"
               type="button"
@@ -304,7 +304,7 @@ function LoginPage() {
           </Link>
         </div>
         <footer className="login-footer">
-          © 2026 Pragati <span>·</span> Every student. A step forward.
+          © 2026 Stride <span>·</span> Every student. A step forward.
         </footer>
       </section>
     </main>
