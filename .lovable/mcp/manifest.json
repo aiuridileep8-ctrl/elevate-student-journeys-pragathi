@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "sdk_version": "3.0.5",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "elevate-student-journeys",
+      "version": "0.1.0",
+      "title": "Elevate Student Journeys"
+    },
+    "tools": [
+      {
+        "name": "list_students",
+        "title": "List students",
+        "description": "List Pragati's simulated sample students with their risk score and level, optionally filtered by risk level.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "level": {
+              "description": "Only return students at this risk level.",
+              "type": "string",
+              "enum": [
+                "high",
+                "moderate",
+                "low"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_student_risk",
+        "title": "Explain student risk",
+        "description": "Get a simulated student's full profile and the weighted factor breakdown behind their risk score.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "studentId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Student ID, e.g. PRG240108."
+            }
+          },
+          "required": [
+            "studentId"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
